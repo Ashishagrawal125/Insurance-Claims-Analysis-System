@@ -1,4 +1,22 @@
-import fitz  # PyMuPDF
+# Try different PDF processing libraries
+PDF_LIBRARY = None
+
+try:
+    import fitz  # PyMuPDF
+    PDF_LIBRARY = "pymupdf"
+except ImportError:
+    try:
+        import pymupdf as fitz
+        PDF_LIBRARY = "pymupdf"
+    except ImportError:
+        try:
+            import PyPDF2
+            PDF_LIBRARY = "pypdf2"
+        except ImportError:
+            raise ImportError(
+                "No PDF processing library found. Please install PyMuPDF or PyPDF2"
+            )
+
 import re
 import uuid
 import os
@@ -6,9 +24,14 @@ import os
 def is_valid_pdf(pdf_path: str) -> bool:
     """Check if the file is a valid PDF"""
     try:
-        doc = fitz.open(pdf_path)
-        doc.close()
-        return True
+        if PDF_LIBRARY == "pymupdf":
+            doc = fitz.open(pdf_path)
+            doc.close()
+            return True
+        elif PDF_LIBRARY == "pypdf2":
+            with open(pdf_path, 'rb') as file:
+                PyPDF2.PdfReader(file)
+            return True
     except:
         return False
 
@@ -71,44 +94,87 @@ def extract_structured_sections(pdf_path: str) -> list[dict]:
     Returns a list of dictionaries containing section information.
     """
     structured_data = []
-    doc = fitz.open(pdf_path)
+    
+    if PDF_LIBRARY == "pymupdf":
+        doc = fitz.open(pdf_path)
+        for page_num, page in enumerate(doc):
+            current_title = "General Information"  # Default title for text before the first heading
+            current_text_block = ""
+            
+            text = page.get_text("text")
+            lines = text.split('\n')
+            
+            for line in lines:
+                if is_title(line):
+                    # When we find a new title, the previous section is complete.
+                    # Save the completed section before starting a new one.
+                    if current_text_block.strip():
+                        structured_data.append({
+                            "id": str(uuid.uuid4()),
+                            "page_number": page_num + 1,
+                            "title": current_title,
+                            "text": " ".join(current_text_block.split()),  # Normalize whitespace
+                            "source": pdf_path
+                        })
+                    
+                    # Start the new section
+                    current_title = line.strip()
+                    current_text_block = ""
+                elif not is_junk(line):
+                    # If the line is not a title and not junk, it's content.
+                    current_text_block += " " + line.strip()
 
-    for page_num, page in enumerate(doc):
-        current_title = "General Information"  # Default title for text before the first heading
-        current_text_block = ""
+            # After the loop, save the last section from the page
+            if current_text_block.strip():
+                structured_data.append({
+                    "id": str(uuid.uuid4()),
+                    "page_number": page_num + 1,
+                    "title": current_title,
+                    "text": " ".join(current_text_block.split()),
+                    "source": pdf_path
+                })
         
-        text = page.get_text("text")
-        lines = text.split('\n')
+        doc.close()
         
-        for line in lines:
-            if is_title(line):
-                # When we find a new title, the previous section is complete.
-                # Save the completed section before starting a new one.
+    elif PDF_LIBRARY == "pypdf2":
+        with open(pdf_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            
+            for page_num, page in enumerate(pdf_reader.pages):
+                current_title = "General Information"  # Default title for text before the first heading
+                current_text_block = ""
+                
+                text = page.extract_text()
+                lines = text.split('\n')
+                
+                for line in lines:
+                    if is_title(line):
+                        # When we find a new title, the previous section is complete.
+                        # Save the completed section before starting a new one.
+                        if current_text_block.strip():
+                            structured_data.append({
+                                "id": str(uuid.uuid4()),
+                                "page_number": page_num + 1,
+                                "title": current_title,
+                                "text": " ".join(current_text_block.split()),  # Normalize whitespace
+                                "source": pdf_path
+                            })
+                        
+                        # Start the new section
+                        current_title = line.strip()
+                        current_text_block = ""
+                    elif not is_junk(line):
+                        # If the line is not a title and not junk, it's content.
+                        current_text_block += " " + line.strip()
+
+                # After the loop, save the last section from the page
                 if current_text_block.strip():
                     structured_data.append({
                         "id": str(uuid.uuid4()),
                         "page_number": page_num + 1,
                         "title": current_title,
-                        "text": " ".join(current_text_block.split()),  # Normalize whitespace
+                        "text": " ".join(current_text_block.split()),
                         "source": pdf_path
                     })
-                
-                # Start the new section
-                current_title = line.strip()
-                current_text_block = ""
-            elif not is_junk(line):
-                # If the line is not a title and not junk, it's content.
-                current_text_block += " " + line.strip()
-
-        # After the loop, save the last section from the page
-        if current_text_block.strip():
-            structured_data.append({
-                "id": str(uuid.uuid4()),
-                "page_number": page_num + 1,
-                "title": current_title,
-                "text": " ".join(current_text_block.split()),
-                "source": pdf_path
-            })
     
-    doc.close()
     return structured_data

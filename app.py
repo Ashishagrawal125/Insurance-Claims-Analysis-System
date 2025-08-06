@@ -37,6 +37,13 @@ def main():
         st.sidebar.success("✅ App is running successfully!")
         st.sidebar.info(f"Python version: {os.sys.version}")
         st.sidebar.info(f"Streamlit version: {st.__version__}")
+        
+        # Show PDF library info
+        try:
+            from utils.pdf_processor import PDF_LIBRARY
+            st.sidebar.info(f"PDF Library: {PDF_LIBRARY}")
+        except:
+            st.sidebar.warning("PDF Library: Unknown")
     
     st.title("🏥 Insurance Claims Analysis System")
     st.markdown("---")
