@@ -2,9 +2,16 @@ import streamlit as st
 import os
 import json
 import tempfile
-from utils.pdf_processor import extract_structured_sections, is_valid_pdf
-from utils.vector_search import create_vector_index, get_top_similar_clauses
-from utils.ai_analyzer import analyze_claim_with_ai
+import traceback
+
+try:
+    from utils.pdf_processor import extract_structured_sections, is_valid_pdf
+    from utils.vector_search import create_vector_index, get_top_similar_clauses
+    from utils.ai_analyzer import analyze_claim_with_ai
+except ImportError as e:
+    st.error(f"Import error: {e}")
+    st.error(f"Traceback: {traceback.format_exc()}")
+    st.stop()
 
 # Page configuration
 st.set_page_config(
@@ -25,6 +32,12 @@ if 'model' not in st.session_state:
     st.session_state.model = None
 
 def main():
+    # Health check for deployment debugging
+    if st.sidebar.button("Health Check"):
+        st.sidebar.success("✅ App is running successfully!")
+        st.sidebar.info(f"Python version: {os.sys.version}")
+        st.sidebar.info(f"Streamlit version: {st.__version__}")
+    
     st.title("🏥 Insurance Claims Analysis System")
     st.markdown("---")
     
