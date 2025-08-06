@@ -1,5 +1,4 @@
-import pymupdf
-import fitz
+import fitz  # PyMuPDF
 import re
 import uuid
 import os
